@@ -8,7 +8,6 @@ RUN useradd --create-home --uid 10001 appuser
 WORKDIR /app
 COPY --from=builder /install /usr/local
 COPY app ./app
-COPY scripts ./scripts
 COPY alembic.ini ./alembic.ini
 COPY alembic ./alembic
 USER appuser
