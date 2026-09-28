@@ -17,9 +17,22 @@ claims in the README and the assignment rubric. Store binary screenshots as
   resolution, merge commit hash, and 2-4 sentences on why the resolution won.
 
 ### Part H — Kubernetes / autoscaling
+- `k8s-autoscaling.txt` — **captured.** `kubectl get pods/svc/hpa/vpa` plus
+  `kubectl top pods/nodes` on the live `kind` cluster (`kind-civicpulse`,
+  namespace `civicpulse`). Shows the HPA reading `cpu: 10%/60%` from
+  metrics-server, the VPA reporting `PROVIDED=True`, and per-pod CPU/memory.
+  Regenerate with `scripts/capture_evidence.ps1`.
+- `vpa-recommendations.txt` — **captured.** `kubectl describe vpa backend-vpa`
+  showing `RecommendationProvided=True` with target `cpu: 143m / memory: 250Mi`
+  and the lower/upper confidence bounds. Mode is `Off` (recommendation-only),
+  so the VPA admission webhook is intentionally scaled to 0 — see ADRs.
 - `hpa-watch.txt` — captured `kubectl get hpa -w` output during a load test.
 - `replicas-vs-load.png` — chart of replicas against offered load.
-- `vpa-recommendations.txt` — `kubectl describe vpa backend-vpa` output.
+
+### Docker Compose functional demo
+- `compose-functional.txt` — **captured.** `/health`, `/ready`, `/metrics`
+  through the frontend origin (proves the nginx proxy), plus two consecutive
+  `/api/stats` calls showing the Redis cache go `MISS` → `HIT`.
 
 ### Part I — CI/CD
 - `ci-red-blocked-merge.png` — a failing check blocking the merge button.
