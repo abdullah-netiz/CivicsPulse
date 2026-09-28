@@ -141,8 +141,8 @@ jobs:
             --data '{"text":"Burst water pipe flooding the street","location":"Street 12"}')
           complaint_id=$(printf '%s' "$response" | python -c 'import json, sys; print(json.load(sys.stdin)["id"])')
           curl --fail --silent "http://localhost:8080/api/complaints/$complaint_id"
-          first_cache=$(curl --dump-header - --silent http://localhost:8080/api/stats | awk 'tolower($1) == "x-cache:" {print toupper($2)}')
-          second_cache=$(curl --dump-header - --silent http://localhost:8080/api/stats | awk 'tolower($1) == "x-cache:" {print toupper($2)}')
+          first_cache=$(curl --dump-header - --silent http://localhost:8080/api/stats | awk 'tolower($1) == "x-cache:" {gsub(/\r/, "", $2); print toupper($2)}')
+          second_cache=$(curl --dump-header - --silent http://localhost:8080/api/stats | awk 'tolower($1) == "x-cache:" {gsub(/\r/, "", $2); print toupper($2)}')
           test "$first_cache" = MISS
           test "$second_cache" = HIT
       - name: Tear down
