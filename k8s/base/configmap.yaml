@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: civicpulse-config
+data:
+  APP_NAME: CivicPulse
+  ENVIRONMENT: production
+  TRIAGE_PROVIDER: simulated
+  GROQ_MODEL: llama-3.1-8b-instant
+  GEMINI_MODEL: gemini-3.8-flash
+  OLLAMA_MODEL: llama3.2:1b
+  OLLAMA_BASE_URL: http://ollama:11434
+  TRIAGE_TIMEOUT_SECONDS: "10"
+  CORS_ORIGINS: http://civicpulse.local
