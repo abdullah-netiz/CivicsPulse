@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 import hashlib
 import json
+
 from app.providers.cache import CacheProvider
 
 
@@ -94,6 +95,5 @@ class GeminiTriage:
         raw_text = parts[0].get("text") if parts else None
         if not isinstance(raw_text, str):
             raise ValueError("Gemini response did not contain JSON text")
-        import json
 
         return TriageResult.model_validate(json.loads(raw_text))

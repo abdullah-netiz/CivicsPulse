@@ -176,8 +176,7 @@ class GroqLLMTriage:
         cleaned = raw_text.strip()
         if cleaned.startswith("```"):
             cleaned = cleaned.strip("`")
-            if cleaned.startswith("json"):
-                cleaned = cleaned[4:]
+            cleaned = cleaned.removeprefix("json")
             cleaned = cleaned.strip()
         try:
             data = json.loads(cleaned)

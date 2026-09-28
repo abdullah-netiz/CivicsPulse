@@ -30,7 +30,7 @@ class ComplaintRepository:
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[Complaint], int]:
-        from sqlalchemy import select, func
+        from sqlalchemy import func, select
 
         query = select(Complaint)
         count_query = select(func.count(Complaint.id))
@@ -55,7 +55,7 @@ class ComplaintRepository:
         return items, total
 
     async def get_stats(self) -> dict:
-        from sqlalchemy import select, func
+        from sqlalchemy import func, select
 
         cat_query = select(Complaint.category, func.count(Complaint.id)).group_by(Complaint.category)
         cat_res = await self.session.execute(cat_query)

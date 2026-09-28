@@ -1,9 +1,10 @@
+from datetime import UTC, datetime
+from uuid import uuid4
+
 import pytest
-from app.models import Status
+
 from app.providers.triage.base import Category, Priority
 from app.schemas import ComplaintCreate, ComplaintResponse
-from datetime import datetime, timezone
-from uuid import uuid4
 
 
 def test_complaint_create_valid():
@@ -28,7 +29,7 @@ def test_complaint_create_validation_bounds():
 
 
 def test_complaint_response_serialization():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     cid = uuid4()
     response = ComplaintResponse(
         id=cid,

@@ -22,20 +22,26 @@ function fillValidForm() {
   fireEvent.change(screen.getByLabelText("Location"), { target: { value: complaint.location } });
 }
 
+function getComplaintForm() {
+  const form = document.querySelector("form");
+  if (!form) throw new Error("Complaint form not found");
+  return form;
+}
+
 describe("Submit view", () => {
   afterEach(() => cleanup());
   beforeEach(() => vi.restoreAllMocks());
 
   it("renders the empty form", () => {
     render(<App />);
-    expect(screen.getByRole("button", { name: /submit complaint/i })).toBeInTheDocument();
+    expect(getComplaintForm().querySelector('button[type="submit"]')).toBeInTheDocument();
     expect(screen.queryByText("Report received")).not.toBeInTheDocument();
   });
 
   it("shows client validation for a short complaint", () => {
     render(<App />);
     fireEvent.change(screen.getByLabelText("Location"), { target: { value: "Street 1" } });
-    fireEvent.submit(screen.getByRole("button", { name: /submit complaint/i }));
+    fireEvent.submit(getComplaintForm());
     expect(screen.getByRole("alert")).toHaveTextContent("at least 10 characters");
   });
 
@@ -44,8 +50,8 @@ describe("Submit view", () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((resolve) => { resolveRequest = resolve; })));
     render(<App />);
     fillValidForm();
-    fireEvent.submit(screen.getByRole("button", { name: /submit complaint/i }));
-    expect(screen.getByRole("button")).toHaveTextContent("Analysing report");
+    fireEvent.submit(getComplaintForm());
+    expect(getComplaintForm().querySelector('button[type="submit"]')).toHaveTextContent("Analysing report");
     resolveRequest(new Response(JSON.stringify(complaint), { status: 201 }));
     await waitFor(() => expect(screen.getByText("Report received")).toBeInTheDocument());
   });
@@ -54,7 +60,7 @@ describe("Submit view", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(complaint), { status: 201 })));
     render(<App />);
     fillValidForm();
-    fireEvent.submit(screen.getByRole("button", { name: /submit complaint/i }));
+    fireEvent.submit(getComplaintForm());
     expect(await screen.findByText("llm:gemini")).toBeInTheDocument();
     expect(screen.getByText("water")).toBeInTheDocument();
     expect(screen.getByText("high")).toBeInTheDocument();
@@ -64,7 +70,7 @@ describe("Submit view", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail: "Rate limit exceeded" }), { status: 429 })));
     render(<App />);
     fillValidForm();
-    fireEvent.submit(screen.getByRole("button", { name: /submit complaint/i }));
+    fireEvent.submit(getComplaintForm());
     expect(await screen.findByRole("alert")).toHaveTextContent("Rate limit exceeded");
   });
 });

@@ -1,4 +1,3 @@
-import pytest
 from app.models import Status
 
 # Valid state machine transitions specified in PDF:

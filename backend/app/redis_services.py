@@ -21,7 +21,7 @@ class TriageCache:
 
     @staticmethod
     def key(text: str, location: str) -> str:
-        digest = hashlib.sha256(f"{text}\n{location}".encode("utf-8")).hexdigest()
+        digest = hashlib.sha256(f"{text}\n{location}".encode()).hexdigest()
         return f"civicpulse:triage:{digest}"
 
     async def get(self, text: str, location: str) -> TriageResult | None:

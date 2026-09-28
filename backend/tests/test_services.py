@@ -1,12 +1,14 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 from uuid import uuid4
+
 import pytest
+
 from app.models import Complaint, Status
-from app.providers.triage.base import Category, Priority, TriageResult
-from app.providers.triage.simulated import SimulatedTriage
-from app.services import ComplaintService
-from app.schemas import ComplaintCreate
 from app.providers.redis_cache import InMemoryCacheProvider
+from app.providers.triage.base import Category, Priority
+from app.providers.triage.simulated import SimulatedTriage
+from app.schemas import ComplaintCreate
+from app.services import ComplaintService
 
 
 @pytest.mark.asyncio

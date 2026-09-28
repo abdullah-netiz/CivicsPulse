@@ -1,10 +1,9 @@
 from unittest.mock import patch
 from uuid import uuid4
+
 import pytest
 from httpx import AsyncClient
 
-from app.models import Status
-from app.providers.triage.base import Category, Priority
 from app.providers.redis_cache import InMemoryCacheProvider
 
 

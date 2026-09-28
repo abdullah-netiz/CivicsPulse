@@ -1,7 +1,7 @@
-from contextlib import asynccontextmanager
-import logging
 import json
+import logging
 import sys
+from contextlib import asynccontextmanager
 from time import perf_counter
 from uuid import uuid4
 
@@ -111,7 +111,7 @@ async def request_context(request: Request, call_next):
     response: Response
     try:
         response = await call_next(request)
-    except Exception as exc:
+    except Exception:
         logger.error(
             "Unhandled server exception during request processing",
             extra={"request_id": request_id},
