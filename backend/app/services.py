@@ -1,17 +1,15 @@
-from time import perf_counter
+import json
 import logging
 import uuid as uuid_module
+from datetime import UTC, datetime
+from time import perf_counter
 
 from app.metrics import TRIAGE_FALLBACKS, TRIAGE_LATENCY
 from app.models import Complaint, Status
-from app.providers.triage.base import TriageProvider
+from app.providers.cache import CacheProvider
+from app.providers.triage.base import Category, Priority, TriageProvider, TriageResult
 from app.repositories import ComplaintRepository
 from app.schemas import ComplaintCreate
-
-from datetime import datetime, timezone
-import json
-from app.providers.cache import CacheProvider
-from app.providers.triage.base import Category, Priority, TriageResult
 from app.services_stats import get_cache_hit_rate
 
 logger = logging.getLogger(__name__)
@@ -38,7 +36,7 @@ def record_triage_outcome(provider: str, latency_ms: int, fallback: bool) -> Non
         "provider": provider,
         "latency_ms": latency_ms,
         "fallback": fallback,
-        "timestamp": datetime.now(timezone.utc),
+        "timestamp": datetime.now(UTC),
     }
     RECENT_TRIAGE_OUTCOMES.append(outcome)
     if len(RECENT_TRIAGE_OUTCOMES) > MAX_RECENT_OUTCOMES:

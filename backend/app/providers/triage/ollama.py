@@ -21,8 +21,8 @@ from app.providers.triage.base import TriageResult
 from app.providers.triage.llm import (
     FENCE_CLOSE,
     FENCE_OPEN,
-    LLMResponseError,
     SYSTEM_PROMPT,
+    LLMResponseError,
     cache_key_for,
 )
 from app.services_stats import record_cache_hit, record_cache_miss
@@ -118,8 +118,7 @@ class OllamaTriage:
         cleaned = raw_text.strip()
         if cleaned.startswith("```"):
             cleaned = cleaned.strip("`")
-            if cleaned.startswith("json"):
-                cleaned = cleaned[4:]
+            cleaned = cleaned.removeprefix("json")
             cleaned = cleaned.strip()
         try:
             import json

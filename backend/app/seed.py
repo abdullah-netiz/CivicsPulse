@@ -1,10 +1,8 @@
 import asyncio
-import os
-import sys
-from datetime import datetime, timezone
-from uuid import UUID, uuid5, NAMESPACE_DNS
+from uuid import NAMESPACE_DNS, uuid5
+
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.models import Complaint, Status
 from app.providers.triage.base import Category, Priority
@@ -409,43 +407,42 @@ async def seed_database() -> None:
     inserted_count = 0
     updated_count = 0
 
-    async with session_factory() as session:
-        async with session.begin():
-            for item in SEED_COMPLAINTS:
-                deterministic_id = uuid5(SEED_NAMESPACE, item["seed_id"])
-                
-                # Check if row already exists
-                stmt = select(Complaint).where(Complaint.id == deterministic_id)
-                res = await session.execute(stmt)
-                existing = res.scalar_one_or_none()
+    async with session_factory() as session, session.begin():
+        for item in SEED_COMPLAINTS:
+            deterministic_id = uuid5(SEED_NAMESPACE, item["seed_id"])
 
-                if existing is None:
-                    complaint = Complaint(
-                        id=deterministic_id,
-                        text=item["text"],
-                        location=item["location"],
-                        reporter_contact=item["reporter_contact"],
-                        category=item["category"],
-                        priority=item["priority"],
-                        status=item["status"],
-                        ai_summary=item["ai_summary"],
-                        triaged_by=item["triaged_by"],
-                        triage_latency_ms=item["triage_latency_ms"],
-                    )
-                    session.add(complaint)
-                    inserted_count += 1
-                else:
-                    # Idempotent: ensure fields match seed values
-                    existing.text = item["text"]
-                    existing.location = item["location"]
-                    existing.reporter_contact = item["reporter_contact"]
-                    existing.category = item["category"]
-                    existing.priority = item["priority"]
-                    existing.status = item["status"]
-                    existing.ai_summary = item["ai_summary"]
-                    existing.triaged_by = item["triaged_by"]
-                    existing.triage_latency_ms = item["triage_latency_ms"]
-                    updated_count += 1
+            # Check if row already exists
+            stmt = select(Complaint).where(Complaint.id == deterministic_id)
+            res = await session.execute(stmt)
+            existing = res.scalar_one_or_none()
+
+            if existing is None:
+                complaint = Complaint(
+                    id=deterministic_id,
+                    text=item["text"],
+                    location=item["location"],
+                    reporter_contact=item["reporter_contact"],
+                    category=item["category"],
+                    priority=item["priority"],
+                    status=item["status"],
+                    ai_summary=item["ai_summary"],
+                    triaged_by=item["triaged_by"],
+                    triage_latency_ms=item["triage_latency_ms"],
+                )
+                session.add(complaint)
+                inserted_count += 1
+            else:
+                # Idempotent: ensure fields match seed values
+                existing.text = item["text"]
+                existing.location = item["location"]
+                existing.reporter_contact = item["reporter_contact"]
+                existing.category = item["category"]
+                existing.priority = item["priority"]
+                existing.status = item["status"]
+                existing.ai_summary = item["ai_summary"]
+                existing.triaged_by = item["triaged_by"]
+                existing.triage_latency_ms = item["triage_latency_ms"]
+                updated_count += 1
 
     await engine.dispose()
     print(f"Seed completed: {inserted_count} inserted, {updated_count} existing verified/updated. Total seed records: {len(SEED_COMPLAINTS)}")

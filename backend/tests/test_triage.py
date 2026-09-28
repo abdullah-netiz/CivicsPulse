@@ -1,4 +1,5 @@
 import pytest
+
 from app.providers.triage.base import Category, Priority
 from app.providers.triage.rules import RuleBasedTriage
 from app.providers.triage.simulated import SimulatedTriage
@@ -101,10 +102,12 @@ async def test_gemini_content_hash_caching_duplicate_calls():
     Duplicate complaints cost one inference, not nine.
     Proves duplicate complaints only trigger one LLM HTTP request.
     """
-    from unittest.mock import AsyncMock, patch
+    from unittest.mock import patch
+
     import httpx
-    from app.providers.triage.gemini import GeminiTriage
+
     from app.providers.redis_cache import InMemoryCacheProvider
+    from app.providers.triage.gemini import GeminiTriage
 
     cache = InMemoryCacheProvider()
     provider = GeminiTriage(
@@ -158,7 +161,9 @@ async def test_gemini_prompt_injection_guardrail():
     reject anything outside it.
     """
     from unittest.mock import patch
+
     import httpx
+
     from app.providers.triage.gemini import GeminiTriage
 
     provider = GeminiTriage(api_key="fake-key", model="gemini-3.8-flash")

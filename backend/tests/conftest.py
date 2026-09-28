@@ -1,16 +1,13 @@
-import asyncio
 import os
-import pytest
-import pytest_asyncio
-from typing import AsyncGenerator
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from collections.abc import AsyncGenerator
 
-from app.config import get_settings
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from app.db import get_session
 from app.main import app
 from app.models import Base
-from app.providers.triage.simulated import SimulatedTriage
 
 # Set test environment defaults
 os.environ["TRIAGE_PROVIDER"] = "simulated"

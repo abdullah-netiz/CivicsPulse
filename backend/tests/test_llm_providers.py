@@ -6,8 +6,8 @@ PDF 2.5 "Determinism": pin CI to simulated/mock providers, never sleep in a
 test, inject malformed output to test the validator.
 """
 
-import logging
 import json
+import logging
 from unittest.mock import patch
 
 import httpx
@@ -261,8 +261,8 @@ async def test_meta_providers_exposes_cache_hit_rate(client):
 @pytest.mark.asyncio
 async def test_fallback_warning_log_content(caplog):
     from app.providers.triage.simulated import SimulatedTriage
-    from app.services import ComplaintService
     from app.schemas import ComplaintCreate
+    from app.services import ComplaintService
 
     class RepoStub:
         async def create(self, complaint):

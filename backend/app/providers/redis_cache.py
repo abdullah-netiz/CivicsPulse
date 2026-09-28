@@ -1,4 +1,5 @@
 from redis.asyncio import Redis, from_url
+
 from app.providers.cache import CacheProvider
 
 
