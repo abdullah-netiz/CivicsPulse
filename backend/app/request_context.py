@@ -15,5 +15,5 @@ def get_request_id() -> str | None:
     return request_id_ctx.get()
 
 
-def set_request_id(value: str) -> None:
+def set_request_id(value: str | None) -> None:
     request_id_ctx.set(value)

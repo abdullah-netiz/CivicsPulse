@@ -1,4 +1,5 @@
 import asyncio
+from typing import TypedDict
 from uuid import NAMESPACE_DNS, uuid5
 
 from sqlalchemy import select
@@ -10,7 +11,21 @@ from app.providers.triage.base import Category, Priority
 # Fixed namespace UUID for generating deterministic complaint IDs from seed data
 SEED_NAMESPACE = uuid5(NAMESPACE_DNS, "civicpulse.pk")
 
-SEED_COMPLAINTS = [
+
+class SeedComplaint(TypedDict):
+    seed_id: str
+    text: str
+    location: str
+    reporter_contact: str | None
+    category: Category
+    priority: Priority
+    status: Status
+    ai_summary: str | None
+    triaged_by: str
+    triage_latency_ms: int
+
+
+SEED_COMPLAINTS: list[SeedComplaint] = [
     # Water (6 complaints)
     {
         "seed_id": "water-01",
