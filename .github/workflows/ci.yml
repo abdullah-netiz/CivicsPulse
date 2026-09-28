@@ -1,0 +1,150 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [dev]
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  BACKEND_IMAGE: civicpulse-backend:ci
+  FRONTEND_IMAGE: civicpulse-frontend:ci
+
+jobs:
+  lint-and-type:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend tooling
+        run: python -m pip install --upgrade pip ruff mypy
+      - name: Ruff
+        run: ruff check backend/app backend/tests
+      - name: Mypy
+        run: mypy backend/app --ignore-missing-imports
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: TypeScript and ESLint-equivalent build checks
+        working-directory: frontend
+        run: npm run build
+
+  test-backend:
+    runs-on: ubuntu-latest
+    env:
+      TRIAGE_PROVIDER: simulated
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend test dependencies
+        run: python -m pip install --upgrade pip -e 'backend[test]'
+      - name: Run backend tests with coverage gate
+        working-directory: backend
+        run: pytest --cov-fail-under=65
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Run frontend tests
+        working-directory: frontend
+        run: npm test -- --run
+
+  build:
+    needs: [lint-and-type, test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker build --tag "$BACKEND_IMAGE" backend
+      - name: Build frontend image
+        run: docker build --tag "$FRONTEND_IMAGE" frontend
+
+  scan:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build images for scanning
+        run: |
+          docker build --tag "$BACKEND_IMAGE" backend
+          docker build --tag "$FRONTEND_IMAGE" frontend
+      - name: Scan backend image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: civicpulse-backend:ci
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+      - name: Scan frontend image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: civicpulse-frontend:ci
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
+  manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate production manifests
+        run: |
+          kubectl kustomize k8s/overlays/prod > /tmp/civicpulse.yaml
+          docker run --rm -i ghcr.io/yannh/kubeconform:v0.6.7 \
+            -strict -ignore-missing-schemas -summary < /tmp/civicpulse.yaml
+
+  integration:
+    needs: [lint-and-type, test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    env:
+      TRIAGE_PROVIDER: simulated
+      POSTGRES_PASSWORD: civicpulse
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start the Compose stack
+        run: docker compose up -d --build
+      - name: Wait for readiness
+        run: |
+          for attempt in $(seq 1 30); do
+            docker compose exec -T backend python -c \
+              "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready')" && exit 0
+            sleep 2
+          done
+          docker compose logs
+          exit 1
+      - name: Exercise the request path and cache
+        run: |
+          response=$(curl --fail --silent --request POST http://localhost:8080/api/complaints \
+            --header 'Content-Type: application/json' \
+            --data '{"text":"Burst water pipe flooding the street","location":"Street 12"}')
+          complaint_id=$(printf '%s' "$response" | python -c 'import json, sys; print(json.load(sys.stdin)["id"])')
+          curl --fail --silent "http://localhost:8080/api/complaints/$complaint_id"
+          first_cache=$(curl --dump-header - --silent http://localhost:8080/api/stats | awk 'tolower($1) == "x-cache:" {print toupper($2)}')
+          second_cache=$(curl --dump-header - --silent http://localhost:8080/api/stats | awk 'tolower($1) == "x-cache:" {print toupper($2)}')
+          test "$first_cache" = MISS
+          test "$second_cache" = HIT
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
