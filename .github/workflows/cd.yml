@@ -137,20 +137,71 @@ jobs:
             --from-literal=GEMINI_API_KEY="$GEMINI_API_KEY" \
             --dry-run=client -o yaml | kubectl apply -f -
           kubectl rollout restart statefulset/postgres -n civicpulse
-          # Postgres must be Ready before the backend's replacement pods start.
-          # The backend runs `alembic upgrade head` on boot and is only Ready
-          # once /ready can reach Postgres, so a cold database makes the pods
-          # crash-loop and burn kubelet backoff inside the 60s startup probe.
+          # Postgres must be Ready before anything that talks to it starts.
           kubectl rollout status statefulset/postgres -n civicpulse --timeout=300s
-          kubectl rollout restart deployment/backend -n civicpulse
+      # Every backend replica runs `alembic upgrade head` on boot. On a fresh
+      # database the replicas race for the same DDL locks, and a pod that waits
+      # longer than its startup probe is SIGKILLed (exit 137) straight into
+      # CrashLoopBackOff backoff, which makes the rollout below time out.
+      # Migrating once, to completion, turns each pod's boot into a fast no-op.
+      - name: Migrate the database once
+        run: |
+          kubectl delete job civicpulse-migrate -n civicpulse --ignore-not-found
+          kubectl apply -f - <<'YAML'
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: civicpulse-migrate
+            namespace: civicpulse
+          spec:
+            backoffLimit: 3
+            template:
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: migrate
+                    image: ${{ env.IMAGE_PREFIX }}/civicpulse-backend:${{ github.sha }}
+                    imagePullPolicy: IfNotPresent
+                    command: ["alembic", "upgrade", "head"]
+                    envFrom:
+                      - configMapRef:
+                          name: civicpulse-config
+                      - secretRef:
+                          name: civicpulse-secrets
+          YAML
+          kubectl wait --for=condition=complete job/civicpulse-migrate -n civicpulse --timeout=300s || {
+            echo "::error::the database migration Job did not complete"
+            kubectl get pods -n civicpulse -l job-name=civicpulse-migrate -o wide || true
+            kubectl logs -n civicpulse -l job-name=civicpulse-migrate --tail=50 || true
+            exit 1
+          }
+      # The pods created by "Apply manifests" still carry the placeholder
+      # secret, so the backend is rolled out again now that the runtime secret
+      # exists and the schema is migrated.
+      - name: Restart the backend
+        run: kubectl rollout restart deployment/backend -n civicpulse
       - name: Wait for rollout
         run: |
           # 300s covers the cold path: the node pulls postgres:16.6-alpine and
           # redis:7.4-alpine, Postgres then runs initdb, and the backend only
           # becomes Ready once /ready reports both Postgres and Redis as ok.
-          kubectl rollout status statefulset/postgres -n civicpulse --timeout=300s
-          kubectl rollout status deployment/backend -n civicpulse --timeout=300s
-          kubectl rollout status deployment/frontend -n civicpulse --timeout=300s
+          # A failed wait dumps the cluster state so the failure is diagnosable
+          # from the job log alone.
+          rollout() {
+            if kubectl rollout status "$1" -n civicpulse --timeout=300s; then
+              return 0
+            fi
+            echo "::error::$1 did not finish rolling out within 300s"
+            kubectl get pods -n civicpulse -o wide || true
+            kubectl get events -n civicpulse --sort-by=.lastTimestamp | tail -30 || true
+            kubectl logs -n civicpulse -l app=backend --all-containers --prefix --tail=60 || true
+            kubectl logs -n civicpulse -l app=frontend --all-containers --prefix --tail=30 || true
+            kubectl describe deployment/backend -n civicpulse || true
+            return 1
+          }
+          rollout statefulset/postgres
+          rollout deployment/backend
+          rollout deployment/frontend
       - name: Smoke test the service
         run: |
           kubectl port-forward -n civicpulse service/frontend 8080:80 >/tmp/port-forward.log 2>&1 &
