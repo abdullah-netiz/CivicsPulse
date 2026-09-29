@@ -2,7 +2,7 @@
 
 CivicPulse is a municipal complaint intake system. A citizen submits free text and a location; the backend validates it, triages it through a replaceable provider, stores the result, and returns the category, priority, summary, and provider.
 
-## Person 1 Slice
+
 
 The first complete workflow is complaint submission through the frontend and API:
 
