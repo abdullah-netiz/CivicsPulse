@@ -1,7 +1,26 @@
 # CivicPulse
 
-[![CI](https://github.com/abdullah-netiz/Civics/actions/workflows/ci.yml/badge.svg)](https://github.com/abdullah-netiz/Civics/actions/workflows/ci.yml)
-[![CD](https://github.com/abdullah-netiz/Civics/actions/workflows/cd.yml/badge.svg)](https://github.com/abdullah-netiz/Civics/actions/workflows/cd.yml)
+<!-- Repository: https://github.com/abdullah-netiz/CivicsPulse -->
+
+[![CI](https://github.com/abdullah-netiz/CivicsPulse/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/abdullah-netiz/CivicsPulse/actions/workflows/ci.yml)
+[![CD](https://github.com/abdullah-netiz/CivicsPulse/actions/workflows/cd.yml/badge.svg?branch=main)](https://github.com/abdullah-netiz/CivicsPulse/actions/workflows/cd.yml)
+[![Release](https://github.com/abdullah-netiz/CivicsPulse/actions/workflows/release.yml/badge.svg)](https://github.com/abdullah-netiz/CivicsPulse/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+[![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)](backend/pyproject.toml)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.11x-009688?logo=fastapi&logoColor=white)](backend/app/main.py)
+[![Pydantic v2](https://img.shields.io/badge/Pydantic-v2-E92063?logo=pydantic&logoColor=white)](backend/app/schemas.py)
+[![React 18](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](frontend/package.json)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](frontend/tsconfig.json)
+[![Vite](https://img.shields.io/badge/Vite-5.x-646CFF?logo=vite&logoColor=white)](frontend/vite.config.ts)
+
+[![PostgreSQL 16](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](compose.yaml)
+[![Redis 7](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)](compose.yaml)
+[![Docker](https://img.shields.io/badge/Docker-multi--stage-2496ED?logo=docker&logoColor=white)](compose.yaml)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-kind%20%2B%20Kustomize-326CE5?logo=kubernetes&logoColor=white)](k8s/base/kustomization.yaml)
+[![Coverage](https://img.shields.io/badge/coverage-%E2%89%A565%25-brightgreen)](.github/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/backend%20tests-47-brightgreen)](backend/tests)
+[![Ruff](https://img.shields.io/badge/lint-ruff%20%2B%20mypy-261230?logo=ruff&logoColor=white)](.github/workflows/ci.yml)
 
 CivicPulse is a municipal complaint intake and operations system. Citizens submit free-text complaints instead of trying to classify them in a form. The backend validates each report, triages it through a replaceable provider, stores it durably, and presents the resulting category, priority, summary, and workflow status to operators.
 
