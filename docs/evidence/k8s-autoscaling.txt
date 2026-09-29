@@ -1,0 +1,39 @@
+﻿Captured: 2026-09-29 01:18:54 +05:00
+
+## kubectl get pods -n civicpulse
+NAME                        READY   STATUS    RESTARTS   AGE
+backend-6b8b7bf6c4-fwcr6    1/1     Running   0          5m
+backend-6b8b7bf6c4-tgxn7    1/1     Running   0          5m7s
+frontend-6dd4f6599f-9cts8   1/1     Running   0          6m17s
+frontend-6dd4f6599f-xr7pf   1/1     Running   0          6m17s
+postgres-0                  1/1     Running   0          6m17s
+redis-846fb7687c-8cftk      1/1     Running   0          6m17s
+
+## kubectl get svc -n civicpulse
+NAME       TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
+backend    ClusterIP   10.96.221.10   <none>        8000/TCP   6m18s
+frontend   ClusterIP   10.96.78.193   <none>        80/TCP     6m18s
+postgres   ClusterIP   10.96.27.11    <none>        5432/TCP   6m17s
+redis      ClusterIP   10.96.212.63   <none>        6379/TCP   6m17s
+
+## kubectl get hpa -n civicpulse
+NAME      REFERENCE            TARGETS        MINPODS   MAXPODS   REPLICAS   AGE
+backend   Deployment/backend   cpu: 10%/60%   2         10        2          6m17s
+
+## kubectl get vpa -n civicpulse
+NAME          MODE   CPU    MEM     PROVIDED   AGE
+backend-vpa   Off    143m   250Mi   True       6m17s
+
+## kubectl top pods -n civicpulse  (metrics-server)
+NAME                        CPU(cores)   MEMORY(bytes)   
+backend-6b8b7bf6c4-fwcr6    19m          65Mi            
+backend-6b8b7bf6c4-tgxn7    22m          65Mi            
+frontend-6dd4f6599f-9cts8   1m           7Mi             
+frontend-6dd4f6599f-xr7pf   1m           7Mi             
+postgres-0                  19m          41Mi            
+redis-846fb7687c-8cftk      11m          3Mi             
+
+## kubectl top nodes
+NAME                       CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   
+civicpulse-control-plane   383m         4%       1153Mi          14%         
+

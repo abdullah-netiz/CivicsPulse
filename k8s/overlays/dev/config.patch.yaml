@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: civicpulse-config
+data:
+  ENVIRONMENT: development
+  TRIAGE_PROVIDER: simulated
+  CORS_ORIGINS: http://civicpulse.local,http://localhost:8080

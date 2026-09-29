@@ -1,0 +1,129 @@
+name: civicpulse
+
+# Production compose file.
+#
+# Differences from compose.yaml (dev):
+#   * No build: keys anywhere -- both application services deploy a
+#     pre-built, immutable image tagged by commit SHA via ${IMAGE_TAG}.
+#   * No source bind mount -- images are self-contained.
+#   * No published port on postgres or redis -- data services are only
+#     reachable on the internal network.
+#   * restart: unless-stopped and deploy.resources limits on every service.
+#
+# Deploy with:  IMAGE_TAG=$(git rev-parse --short HEAD) docker compose -f compose.prod.yaml up -d
+
+services:
+  postgres:
+    image: postgres:16.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-civicpulse}
+      POSTGRES_USER: ${POSTGRES_USER:-civicpulse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in production}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  ollama:
+    image: ollama/ollama:0.5.4
+    restart: unless-stopped
+    volumes:
+      - ollama_models:/root/.ollama
+    networks: [internal]
+    profiles: ["offline-ai"]
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+
+  backend:
+    image: ${REGISTRY:-ghcr.io/abdullah-netiz}/civicpulse-backend:${IMAGE_TAG:?IMAGE_TAG must be set (use the git commit SHA)}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://civicpulse:civicpulse@postgres:5432/civicpulse}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      TRIAGE_PROVIDER: ${TRIAGE_PROVIDER:-llm}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.1-8b-instant}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
+      TRIAGE_TIMEOUT_SECONDS: ${TRIAGE_TIMEOUT_SECONDS:-10}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+    networks: [edge, internal]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+  frontend:
+    image: ${REGISTRY:-ghcr.io/abdullah-netiz}/civicpulse-frontend:${IMAGE_TAG:?IMAGE_TAG must be set (use the git commit SHA)}
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    networks: [edge]
+    depends_on:
+      backend: {condition: service_healthy}
+    healthcheck:
+      # 127.0.0.1, not localhost: /etc/hosts prefers ::1 (IPv6) but nginx
+      # listens on IPv4 only, so `localhost` would be refused (see Q8 notes).
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+networks:
+  edge:
+    driver: bridge
+  internal:
+    driver: bridge
+    internal: true
+
+volumes:
+  pgdata:        # PostgreSQL data directory -- the durable one
+  redisdata:     # Redis AOF persistence: preserves rate-limit windows and triage content-hash entries across restarts.
+  ollama_models: # model weights, so we do not re-pull ~800 MB on every up
