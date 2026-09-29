@@ -11,6 +11,11 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/abdullah-netiz
+  # Defined once and reused everywhere: helm/kind-action defaults the cluster to
+  # "chart-testing" while the kind CLI defaults to "kind", so the two must be
+  # pinned to the same name or `kind load docker-image` addresses a cluster that
+  # does not exist ("ERROR: no nodes found for cluster \"kind\"").
+  CLUSTER_NAME: civicpulse
 
 jobs:
   test:
@@ -62,8 +67,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # build-push pushes to GHCR from a different runner, so this job starts
+      # with no registry session. Without the login the `docker pull` below would
+      # fail for private packages (packages pushed by a workflow default to
+      # private), and the whole image side-loading would break.
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Create ephemeral cluster
         uses: helm/kind-action@v1.10.0
+        with:
+          # Pin the name; the action's default is "chart-testing".
+          cluster_name: ${{ env.CLUSTER_NAME }}
+      - name: Install cluster prerequisites
+        run: |
+          # kind ships no dynamic storage provisioner, so the Postgres and Redis
+          # PVCs would stay Pending forever, their pods would never become Ready
+          # and both rollouts would burn their full timeout.
+          kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.37/deploy/local-path-storage.yaml
+          kubectl wait --for=condition=Available deployment/local-path-provisioner \
+            -n local-path-storage --timeout=120s
+          kubectl patch storageclass local-path \
+            -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+          # k8s/base/vpa.yaml is part of the prod overlay, so the
+          # VerticalPodAutoscaler CRDs must exist before `kubectl apply -k`
+          # (CRDs only: updateMode is "Off", so no controller is required).
+          kubectl apply -f https://raw.githubusercontent.com/kubernetes/autoscaler/vertical-pod-autoscaler-1.3.1/vertical-pod-autoscaler/deploy/vpa-v1-crd-gen.yaml
       - name: Configure immutable images
         run: |
           cd k8s/overlays/prod
@@ -72,25 +104,53 @@ jobs:
             civicpulse-frontend=${{ env.IMAGE_PREFIX }}/civicpulse-frontend:${{ github.sha }}
           docker pull ${{ env.IMAGE_PREFIX }}/civicpulse-backend:${{ github.sha }}
           docker pull ${{ env.IMAGE_PREFIX }}/civicpulse-frontend:${{ github.sha }}
-          kind load docker-image ${{ env.IMAGE_PREFIX }}/civicpulse-backend:${{ github.sha }}
-          kind load docker-image ${{ env.IMAGE_PREFIX }}/civicpulse-frontend:${{ github.sha }}
+          # --name is required: without it the kind CLI looks for a cluster
+          # called "kind". The tags match the overlay exactly because
+          # `kustomize edit set image` above wrote the same SHA into
+          # ghcr.io/abdullah-netiz/civicpulse-{backend,frontend}.
+          kind load docker-image --name "${CLUSTER_NAME}" \
+            ${{ env.IMAGE_PREFIX }}/civicpulse-backend:${{ github.sha }}
+          kind load docker-image --name "${CLUSTER_NAME}" \
+            ${{ env.IMAGE_PREFIX }}/civicpulse-frontend:${{ github.sha }}
       - name: Apply manifests
         run: kubectl apply -k k8s/overlays/prod
+      # The secrets are passed through `env:` instead of being interpolated into
+      # the command line: a quote or backtick in a password can no longer break
+      # the shell. Secret name/namespace match the `secretRef` and
+      # `secretKeyRef` entries in k8s/base/{backend,postgres}.yaml.
       - name: Apply runtime secrets
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
+          # Fail in seconds, not after a five-minute rollout timeout: an empty
+          # POSTGRES_PASSWORD makes the postgres container refuse to initialise.
+          : "${POSTGRES_PASSWORD:?the POSTGRES_PASSWORD repository secret is not set}"
+          if [ -z "$GROQ_API_KEY" ]; then
+            echo "::warning::GROQ_API_KEY is empty; TRIAGE_PROVIDER=llm will fall back to rules."
+          fi
           kubectl create secret generic civicpulse-secrets -n civicpulse \
-            --from-literal=POSTGRES_PASSWORD='${{ secrets.POSTGRES_PASSWORD }}' \
-            --from-literal=DATABASE_URL="postgresql+asyncpg://civicpulse:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/civicpulse" \
-            --from-literal=GROQ_API_KEY='${{ secrets.GROQ_API_KEY }}' \
-            --from-literal=GEMINI_API_KEY='${{ secrets.GEMINI_API_KEY }}' \
+            --from-literal=POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+            --from-literal=DATABASE_URL="postgresql+asyncpg://civicpulse:${POSTGRES_PASSWORD}@postgres:5432/civicpulse" \
+            --from-literal=GROQ_API_KEY="$GROQ_API_KEY" \
+            --from-literal=GEMINI_API_KEY="$GEMINI_API_KEY" \
             --dry-run=client -o yaml | kubectl apply -f -
           kubectl rollout restart statefulset/postgres -n civicpulse
+          # Postgres must be Ready before the backend's replacement pods start.
+          # The backend runs `alembic upgrade head` on boot and is only Ready
+          # once /ready can reach Postgres, so a cold database makes the pods
+          # crash-loop and burn kubelet backoff inside the 60s startup probe.
+          kubectl rollout status statefulset/postgres -n civicpulse --timeout=300s
           kubectl rollout restart deployment/backend -n civicpulse
       - name: Wait for rollout
         run: |
-          kubectl rollout status statefulset/postgres -n civicpulse --timeout=180s
-          kubectl rollout status deployment/backend -n civicpulse --timeout=180s
-          kubectl rollout status deployment/frontend -n civicpulse --timeout=180s
+          # 300s covers the cold path: the node pulls postgres:16.6-alpine and
+          # redis:7.4-alpine, Postgres then runs initdb, and the backend only
+          # becomes Ready once /ready reports both Postgres and Redis as ok.
+          kubectl rollout status statefulset/postgres -n civicpulse --timeout=300s
+          kubectl rollout status deployment/backend -n civicpulse --timeout=300s
+          kubectl rollout status deployment/frontend -n civicpulse --timeout=300s
       - name: Smoke test the service
         run: |
           kubectl port-forward -n civicpulse service/frontend 8080:80 >/tmp/port-forward.log 2>&1 &
@@ -101,6 +161,8 @@ jobs:
           kubectl get pods -n civicpulse
           kubectl describe deployment/backend -n civicpulse
           exit 1
+      # Diagnostic only: the VPA CRDs are installed above, but this step must
+      # never be able to fail the deployment, so it is non-blocking.
       - name: Print autoscaling status
         if: always()
-        run: kubectl get hpa,vpa,pdb -n civicpulse
+        run: kubectl get hpa,vpa,pdb -n civicpulse || true
