@@ -60,8 +60,14 @@ spec:
             httpGet:
               path: /health
               port: http
+            # 30 x 2s = 60s was too tight: the first boot runs
+            # `alembic upgrade head` before uvicorn listens, and on a cold
+            # database the kubelet SIGKILLed the container mid-migration
+            # (exit 137), which turned the rollout into a crash-loop.
+            # 30 x 5s = 150s gives a cold start room without weakening the
+            # liveness probe, which still restarts a wedged process.
             failureThreshold: 30
-            periodSeconds: 2
+            periodSeconds: 5
           livenessProbe:
             httpGet:
               path: /health
